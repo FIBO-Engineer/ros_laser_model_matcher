@@ -141,7 +141,7 @@ void LaserScanMatcher::initParams()
   if (!nh_private_.getParam ("base_frame", base_frame_))
     base_frame_ = "base_link";
   if (!nh_private_.getParam ("fixed_frame", fixed_frame_))
-    fixed_frame_ = "world";
+    fixed_frame_ = "anchor";
 
   // **** input type - laser scan, or point clouds?
   // if false, will subscribe to LaserScan msgs on /scan.
@@ -458,7 +458,7 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
   // **** estimated change since last scan
 
   // get the predicted offset of the scan base pose from the last scan base pose
-  tf::Transform pred_last_base_offset = getPrediction(time);
+  tf::Transform pred_last_base_offset = getPrediction(ros::Time(0));
 
   // calculate the predicted scan base pose by applying the predicted offset to the last scan base pose
   tf::Transform pred_base_in_fixed = last_base_in_fixed_ * pred_last_base_offset;
@@ -507,6 +507,7 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
 
     // calculate the measured pose of the scan in the fixed frame
     last_base_in_fixed_ = keyframe_base_in_fixed_ * meas_keyframe_base_offset;
+    tf::Transform last_fixed_in_base = last_base_in_fixed_.inverse();
 
     // **** publish
 
@@ -536,9 +537,9 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
       // unstamped Pose2D message
       geometry_msgs::Pose2D::Ptr pose_msg;
       pose_msg = boost::make_shared<geometry_msgs::Pose2D>();
-      pose_msg->x = last_base_in_fixed_.getOrigin().getX();
-      pose_msg->y = last_base_in_fixed_.getOrigin().getY();
-      pose_msg->theta = tf::getYaw(last_base_in_fixed_.getRotation());
+      pose_msg->x = last_fixed_in_base.getOrigin().getX();
+      pose_msg->y = last_fixed_in_base.getOrigin().getY();
+      pose_msg->theta = tf::getYaw(last_fixed_in_base.getRotation());
       pose_publisher_.publish(pose_msg);
     }
     if (publish_pose_stamped_)
@@ -548,9 +549,9 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
       pose_stamped_msg = boost::make_shared<geometry_msgs::PoseStamped>();
 
       pose_stamped_msg->header.stamp    = time;
-      pose_stamped_msg->header.frame_id = fixed_frame_;
+      pose_stamped_msg->header.frame_id = base_frame_;
 
-      tf::poseTFToMsg(last_base_in_fixed_, pose_stamped_msg->pose);
+      tf::poseTFToMsg(last_fixed_in_base, pose_stamped_msg->pose);
 
       pose_stamped_publisher_.publish(pose_stamped_msg);
     }
@@ -559,7 +560,7 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
       // unstamped PoseWithCovariance message
       geometry_msgs::PoseWithCovariance::Ptr pose_with_covariance_msg;
       pose_with_covariance_msg = boost::make_shared<geometry_msgs::PoseWithCovariance>();
-      tf::poseTFToMsg(last_base_in_fixed_, pose_with_covariance_msg->pose);
+      tf::poseTFToMsg(last_fixed_in_base, pose_with_covariance_msg->pose);
 
       pose_with_covariance_msg->covariance = boost::assign::list_of
         (xy_cov(0, 0)) (xy_cov(0, 1)) (0) (0) (0) (0)
@@ -578,9 +579,9 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
       pose_with_covariance_stamped_msg = boost::make_shared<geometry_msgs::PoseWithCovarianceStamped>();
 
       pose_with_covariance_stamped_msg->header.stamp    = time;
-      pose_with_covariance_stamped_msg->header.frame_id = fixed_frame_;
+      pose_with_covariance_stamped_msg->header.frame_id = base_frame_;
 
-      tf::poseTFToMsg(last_base_in_fixed_, pose_with_covariance_stamped_msg->pose.pose);
+      tf::poseTFToMsg(last_fixed_in_base, pose_with_covariance_stamped_msg->pose.pose);
 
       pose_with_covariance_stamped_msg->pose.covariance = boost::assign::list_of
         (xy_cov(0, 0)) (xy_cov(0, 1)) (0) (0) (0) (0)
@@ -595,7 +596,7 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
 
     if (publish_tf_)
     {
-      tf::StampedTransform transform_msg (last_base_in_fixed_, time, fixed_frame_, base_frame_);
+      tf::StampedTransform transform_msg (last_fixed_in_base, time, base_frame_, fixed_frame_);
       tf_broadcaster_.sendTransform (transform_msg);
     }
   }
