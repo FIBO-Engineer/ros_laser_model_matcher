@@ -15,6 +15,8 @@ Example launch file: launches the scan matcher with pre-recorded data
     name="laser_scan_matcher_node" output="screen">
     <param name="max_iterations" value="10"/>
     <param name="publish_tf" value="true"/>
+    <param name="model_path" value="/home/mini/catkin_ws/src/scan_tools/model/fibo_paper_elevator.pcd"/>
+    <param name="init_x_in_fixed" value="-1.5"/>
   </node>
 
   

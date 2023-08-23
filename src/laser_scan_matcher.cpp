@@ -37,6 +37,7 @@
 
 #include <laser_scan_matcher/laser_scan_matcher.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/io/pcd_io.h>
 #include <boost/assign.hpp>
 #include <tf/transform_datatypes.h>
 
@@ -48,7 +49,8 @@ namespace scan_tools
                                                                                        initialized_(false),
                                                                                        received_imu_(false),
                                                                                        received_odom_(false),
-                                                                                       received_vel_(false)
+                                                                                       received_vel_(false),
+                                                                                       model_cloud(new pcl::PointCloud<pcl::PointXYZ>())
   {
     ROS_INFO("Starting LaserScanMatcher");
 
@@ -58,7 +60,8 @@ namespace scan_tools
 
     // **** state variables
 
-    last_base_in_fixed_.setIdentity();
+    // last_base_in_fixed_.setIdentity(); // set in initParams()
+
     last_used_odom_pose_.setIdentity();
     input_.laser[0] = 0.0;
     input_.laser[1] = 0.0;
@@ -140,6 +143,43 @@ namespace scan_tools
       base_frame_ = "base_link";
     if (!nh_private_.getParam("fixed_frame", fixed_frame_))
       fixed_frame_ = "anchor";
+
+    if (!nh_private_.getParam("model_path", model_path_))
+    {
+      if (pcl::io::loadPCDFile<pcl::PointXYZ>(model_path_, *model_cloud) == -1) //* load the file
+      {
+        ROS_FATAL("Couldn't read model file %s", model_path_.c_str());
+      }
+      else
+      {
+        ROS_INFO("Model loaded successfully.");
+      }
+    }
+    else
+    {
+      ROS_FATAL("Model PCD Path is not specified, the program will not work as expected.");
+    }
+
+    double init_x_in_fixed, init_y_in_fixed, init_a_in_fixed;
+    if (!nh_private_.getParam("init_x_in_fixed", init_x_in_fixed))
+      init_x_in_fixed = -2.0;
+    if (!nh_private_.getParam("init_y_in_fixed", init_y_in_fixed))
+      init_y_in_fixed = 0.0;
+    if (!nh_private_.getParam("init_a_in_fixed", init_a_in_fixed))
+      init_a_in_fixed = 0.0;
+
+    tf::Quaternion init_quat_in_fixed;
+    init_quat_in_fixed.setRPY(0.0, 0.0, init_a_in_fixed);
+    last_base_in_fixed_.setOrigin(tf::Vector3(init_x_in_fixed, init_y_in_fixed, 0));
+    last_base_in_fixed_.setRotation(init_quat_in_fixed);
+
+    PointCloudToLDP(model_cloud, model_ldp);
+
+    model_ldp->estimate[0] = 0.0;
+    model_ldp->estimate[1] = 0.0;
+    model_ldp->estimate[2] = 0.0;
+
+    input_.laser_ref = model_ldp;
 
     // **** input type - laser scan, or point clouds?
     // if false, will subscribe to LaserScan msgs on /scan.
@@ -382,7 +422,6 @@ namespace scan_tools
         return;
       }
 
-      PointCloudToLDP(cloud, prev_ldp_scan_);
       last_icp_time_ = cloud_header.stamp;
       initialized_ = true;
     }
@@ -407,7 +446,6 @@ namespace scan_tools
         return;
       }
 
-      laserScanToLDP(scan_msg, prev_ldp_scan_);
       last_icp_time_ = scan_msg->header.stamp;
       initialized_ = true;
     }
@@ -428,19 +466,6 @@ namespace scan_tools
     // of the laser in the laser frame since the last scan
     // The computed correction is then propagated using the tf machinery
 
-    prev_ldp_scan_->odometry[0] = 0.0;
-    prev_ldp_scan_->odometry[1] = 0.0;
-    prev_ldp_scan_->odometry[2] = 0.0;
-
-    prev_ldp_scan_->estimate[0] = 0.0;
-    prev_ldp_scan_->estimate[1] = 0.0;
-    prev_ldp_scan_->estimate[2] = 0.0;
-
-    prev_ldp_scan_->true_pose[0] = 0.0;
-    prev_ldp_scan_->true_pose[1] = 0.0;
-    prev_ldp_scan_->true_pose[2] = 0.0;
-
-    input_.laser_ref = prev_ldp_scan_;
     input_.laser_sens = curr_ldp_scan;
 
     // **** estimated change since last scan
@@ -577,15 +602,11 @@ namespace scan_tools
     }
     else
     {
-      meas_last_base_offset.setIdentity();
+      meas_base_offset.setIdentity();
       ROS_WARN("Error in scan matching");
     }
 
     // **** swap old and new
-
-    // generate a prev frame
-    ld_free(prev_ldp_scan_);
-    prev_ldp_scan_ = curr_ldp_scan;
 
     last_icp_time_ = time;
 
