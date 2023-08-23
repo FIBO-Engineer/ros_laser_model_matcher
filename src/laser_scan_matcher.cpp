@@ -60,7 +60,6 @@ LaserScanMatcher::LaserScanMatcher(ros::NodeHandle nh, ros::NodeHandle nh_privat
   // **** state variables
 
   last_base_in_fixed_.setIdentity();
-  keyframe_base_in_fixed_.setIdentity();
   last_used_odom_pose_.setIdentity();
   input_.laser[0] = 0.0;
   input_.laser[1] = 0.0;
@@ -163,15 +162,6 @@ void LaserScanMatcher::initParams()
     input_.max_reading = cloud_range_max_;
   }
 
-  // **** keyframe params: when to generate the keyframe scan
-  // if either is set to 0, reduces to frame-to-frame matching
-
-  if (!nh_private_.getParam ("kf_dist_linear", kf_dist_linear_))
-    kf_dist_linear_ = 0.10;
-  if (!nh_private_.getParam ("kf_dist_angular", kf_dist_angular_))
-    kf_dist_angular_ = 10.0 * (M_PI / 180.0);
-
-  kf_dist_linear_sq_ = kf_dist_linear_ * kf_dist_linear_;
 
   // **** What predictions are available to speed up the ICP?
   // 1) imu - [theta] from imu yaw angle - /imu topic
@@ -463,15 +453,13 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
   // calculate the predicted scan base pose by applying the predicted offset to the last scan base pose
   tf::Transform pred_base_in_fixed = last_base_in_fixed_ * pred_last_base_offset;
 
-  // calculate the offset between the keyframe base pose and predicted scan base pose
-  tf::Transform pred_keyframe_base_offset = keyframe_base_in_fixed_.inverse() * pred_base_in_fixed;
+  // prev and last used interchangably
+  // convert the predicted offset from the prev base frame to be in the prev laser frame
+  tf::Transform pred_laser_offset = laser_from_base_ * pred_last_base_offset * base_from_laser_ ;
 
-  // convert the predicted offset from the keyframe base frame to be in the keyframe laser frame
-  tf::Transform pred_keyframe_laser_offset = laser_from_base_ * pred_keyframe_base_offset * base_from_laser_ ;
-
-  input_.first_guess[0] = pred_keyframe_laser_offset.getOrigin().getX();
-  input_.first_guess[1] = pred_keyframe_laser_offset.getOrigin().getY();
-  input_.first_guess[2] = tf::getYaw(pred_keyframe_laser_offset.getRotation());
+  input_.first_guess[0] = pred_laser_offset.getOrigin().getX();
+  input_.first_guess[1] = pred_laser_offset.getOrigin().getY();
+  input_.first_guess[2] = tf::getYaw(pred_laser_offset.getRotation());
 
   // If they are non-Null, free covariance gsl matrices to avoid leaking memory
   if (output_.cov_x_m)
@@ -493,20 +481,20 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
   // *** scan match - using point to line icp from CSM
 
   sm_icp(&input_, &output_);
-  tf::Transform meas_keyframe_base_offset;
+  tf::Transform meas_base_offset;
 
   if (output_.valid)
   {
 
-    // the measured offset of the scan from the keyframe in the keyframe laser frame
-    tf::Transform meas_keyframe_laser_offset;
-    createTfFromXYTheta(output_.x[0], output_.x[1], output_.x[2], meas_keyframe_laser_offset);
+    // the measured offset of the scan from the prev in the prev laser frame
+    tf::Transform meas_laser_offset;
+    createTfFromXYTheta(output_.x[0], output_.x[1], output_.x[2], meas_laser_offset);
 
-    // convert the measured offset from the keyframe laser frame to the keyframe base frame
-    meas_keyframe_base_offset = base_from_laser_ * meas_keyframe_laser_offset * laser_from_base_;
+    // convert the measured offset from the prev laser frame to the prev base frame
+    meas_base_offset = base_from_laser_ * meas_laser_offset * laser_from_base_;
 
     // calculate the measured pose of the scan in the fixed frame
-    last_base_in_fixed_ = keyframe_base_in_fixed_ * meas_keyframe_base_offset;
+    last_base_in_fixed_ = last_base_in_fixed_ * meas_base_offset;
     tf::Transform last_fixed_in_base = last_base_in_fixed_.inverse();
 
     // **** publish
@@ -522,8 +510,8 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
       xy_cov(1, 1) = gsl_matrix_get(output_.cov_x_m, 1, 1);
       yaw_cov = gsl_matrix_get(output_.cov_x_m, 2, 2);
 
-      // rotate xy covariance from the keyframe into odom frame
-      auto rotation = getLaserRotation(keyframe_base_in_fixed_);
+      // rotate xy covariance from the last into odom frame
+      auto rotation = getLaserRotation(last_base_in_fixed_);
       xy_cov = rotation * xy_cov * rotation.transpose();
     }
     else {
@@ -602,23 +590,15 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
   }
   else
   {
-    meas_keyframe_base_offset.setIdentity();
+    meas_last_base_offset.setIdentity();
     ROS_WARN("Error in scan matching");
   }
 
   // **** swap old and new
 
-  if (newKeyframeNeeded(meas_keyframe_base_offset))
-  {
-    // generate a keyframe
-    ld_free(prev_ldp_scan_);
-    prev_ldp_scan_ = curr_ldp_scan;
-    keyframe_base_in_fixed_ = last_base_in_fixed_;
-  }
-  else
-  {
-    ld_free(curr_ldp_scan);
-  }
+  // generate a prev frame
+  ld_free(prev_ldp_scan_);
+  prev_ldp_scan_ = curr_ldp_scan;
 
   last_icp_time_ = time;
 
@@ -626,17 +606,6 @@ void LaserScanMatcher::processScan(LDP& curr_ldp_scan, const ros::Time& time)
 
   double dur = (ros::WallTime::now() - start).toSec() * 1e3;
   ROS_DEBUG("Scan matcher total duration: %.1f ms", dur);
-}
-
-bool LaserScanMatcher::newKeyframeNeeded(const tf::Transform& d)
-{
-  if (fabs(tf::getYaw(d.getRotation())) > kf_dist_angular_) return true;
-
-  double x = d.getOrigin().getX();
-  double y = d.getOrigin().getY();
-  if (x*x + y*y > kf_dist_linear_sq_) return true;
-
-  return false;
 }
 
 void LaserScanMatcher::PointCloudToLDP(const PointCloudT::ConstPtr& cloud,
