@@ -39,6 +39,7 @@
 #define LASER_SCAN_MATCHER_LASER_SCAN_MATCHER_H
 
 #include <ros/ros.h>
+#include <std_srvs/SetBool.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/LaserScan.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -82,6 +83,8 @@ namespace scan_tools
     ros::Subscriber odom_subscriber_;
     ros::Subscriber imu_subscriber_;
     ros::Subscriber vel_subscriber_;
+    ros::Subscriber estimate_model_pose_subscriber_;
+    ros::ServiceServer enable_matching_service_;
 
     tf::TransformListener tf_listener_;
     tf::TransformBroadcaster tf_broadcaster_;
@@ -99,8 +102,9 @@ namespace scan_tools
     std::string base_frame_;
     std::string fixed_frame_;
     std::string model_path_;
-    pcl::PointCloud<pcl::PointXYZ>::Ptr model_cloud;
-    LDP model_ldp;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr model_cloud_;
+    LDP model_ldp_;
+    bool is_enabled_;
 
     double cloud_range_min_;
     double cloud_range_max_;
@@ -114,10 +118,6 @@ namespace scan_tools
     std::vector<double> orientation_covariance_;
 
     bool use_cloud_input_;
-
-    double kf_dist_linear_;
-    double kf_dist_linear_sq_;
-    double kf_dist_angular_;
 
     // **** What predictions are available to speed up the ICP?
     // 1) imu - [theta] from imu yaw angle - /imu topic
@@ -176,6 +176,10 @@ namespace scan_tools
     void imuCallback(const sensor_msgs::Imu::ConstPtr &imu_msg);
     void velCallback(const geometry_msgs::Twist::ConstPtr &twist_msg);
     void velStmpCallback(const geometry_msgs::TwistStamped::ConstPtr &twist_msg);
+
+    void estimateModelPoseCallback(const geometry_msgs::PoseStamped::ConstPtr &model_pose_msg);
+    bool enableMatchingCallback(std_srvs::SetBool::Request &req,
+                                std_srvs::SetBool::Response &res);
 
     void createCache(const sensor_msgs::LaserScan::ConstPtr &scan_msg);
 

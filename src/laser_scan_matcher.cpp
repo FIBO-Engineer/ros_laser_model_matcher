@@ -50,7 +50,8 @@ namespace scan_tools
                                                                                        received_imu_(false),
                                                                                        received_odom_(false),
                                                                                        received_vel_(false),
-                                                                                       model_cloud(new pcl::PointCloud<pcl::PointXYZ>())
+                                                                                       is_enabled_(false),
+                                                                                       model_cloud_(new pcl::PointCloud<pcl::PointXYZ>())
   {
     ROS_INFO("Starting LaserScanMatcher");
 
@@ -59,9 +60,7 @@ namespace scan_tools
     initParams();
 
     // **** state variables
-
-    // last_base_in_fixed_.setIdentity(); // set in initParams()
-
+    last_base_in_fixed_.setIdentity();
     last_used_odom_pose_.setIdentity();
     input_.laser[0] = 0.0;
     input_.laser[1] = 0.0;
@@ -71,6 +70,9 @@ namespace scan_tools
     output_.cov_x_m = 0;
     output_.dx_dy1_m = 0;
     output_.dx_dy2_m = 0;
+
+    // **** services
+    enable_matching_service_ = nh_.advertiseService("enable_matching", &LaserScanMatcher::enableMatchingCallback, this);
 
     // **** publishers
 
@@ -99,6 +101,7 @@ namespace scan_tools
     }
 
     // *** subscribers
+    estimate_model_pose_subscriber_ = nh_.subscribe("estimate_model_pose", 1, &LaserScanMatcher::estimateModelPoseCallback, this);
 
     if (use_cloud_input_)
     {
@@ -144,9 +147,9 @@ namespace scan_tools
     if (!nh_private_.getParam("fixed_frame", fixed_frame_))
       fixed_frame_ = "anchor";
 
-    if (!nh_private_.getParam("model_path", model_path_))
+    if (nh_private_.getParam("model_path", model_path_))
     {
-      if (pcl::io::loadPCDFile<pcl::PointXYZ>(model_path_, *model_cloud) == -1) //* load the file
+      if (pcl::io::loadPCDFile<pcl::PointXYZ>(model_path_, *model_cloud_) == -1) //* load the file
       {
         ROS_FATAL("Couldn't read model file %s", model_path_.c_str());
       }
@@ -160,26 +163,13 @@ namespace scan_tools
       ROS_FATAL("Model PCD Path is not specified, the program will not work as expected.");
     }
 
-    double init_x_in_fixed, init_y_in_fixed, init_a_in_fixed;
-    if (!nh_private_.getParam("init_x_in_fixed", init_x_in_fixed))
-      init_x_in_fixed = -2.0;
-    if (!nh_private_.getParam("init_y_in_fixed", init_y_in_fixed))
-      init_y_in_fixed = 0.0;
-    if (!nh_private_.getParam("init_a_in_fixed", init_a_in_fixed))
-      init_a_in_fixed = 0.0;
+    PointCloudToLDP(model_cloud_, model_ldp_);
 
-    tf::Quaternion init_quat_in_fixed;
-    init_quat_in_fixed.setRPY(0.0, 0.0, init_a_in_fixed);
-    last_base_in_fixed_.setOrigin(tf::Vector3(init_x_in_fixed, init_y_in_fixed, 0));
-    last_base_in_fixed_.setRotation(init_quat_in_fixed);
+    model_ldp_->estimate[0] = 0.0;
+    model_ldp_->estimate[1] = 0.0;
+    model_ldp_->estimate[2] = 0.0;
 
-    PointCloudToLDP(model_cloud, model_ldp);
-
-    model_ldp->estimate[0] = 0.0;
-    model_ldp->estimate[1] = 0.0;
-    model_ldp->estimate[2] = 0.0;
-
-    input_.laser_ref = model_ldp;
+    input_.laser_ref = model_ldp_;
 
     // **** input type - laser scan, or point clouds?
     // if false, will subscribe to LaserScan msgs on /scan.
@@ -455,8 +445,48 @@ namespace scan_tools
     processScan(curr_ldp_scan, scan_msg->header.stamp);
   }
 
+  void LaserScanMatcher::estimateModelPoseCallback(const geometry_msgs::PoseStamped::ConstPtr &model_pose_msg)
+  {
+    boost::mutex::scoped_lock(mutex_);
+    tf::StampedTransform msg_from_base;
+    tf::Stamped<tf::Pose> model_from_msg;
+    tf::poseStampedMsgToTF(*model_pose_msg, model_from_msg);
+
+    try
+    {
+      tf_listener_.waitForTransform(base_frame_, model_pose_msg->header.frame_id, ros::Time(0), ros::Duration(tf_timeout_));
+      tf_listener_.lookupTransform(base_frame_, model_pose_msg->header.frame_id, ros::Time(0), msg_from_base);
+    }
+    catch (const tf::TransformException &ex)
+    {
+      ROS_WARN("Could not get initial transform from %s to %s frame, %s", base_frame_.c_str(), model_pose_msg->header.frame_id.c_str(), ex.what());
+      return;
+    }
+    last_base_in_fixed_ = (model_from_msg * msg_from_base).inverse();
+    ROS_INFO("Successfully set new anchor point");
+  }
+
+  bool LaserScanMatcher::enableMatchingCallback(std_srvs::SetBool::Request &req,
+                                                std_srvs::SetBool::Response &res)
+  {
+    is_enabled_ = req.data;
+    res.success = true;
+    res.message = "LaserScanMatcher is now " + std::string(is_enabled_ ? "enabled" : "disabled");
+    return true;
+  }
+
   void LaserScanMatcher::processScan(LDP &curr_ldp_scan, const ros::Time &time)
   {
+    if (!is_enabled_)
+    {
+      if (publish_tf_)
+      {
+        tf::StampedTransform transform_msg(last_base_in_fixed_.inverse(), time, base_frame_, fixed_frame_);
+        tf_broadcaster_.sendTransform(transform_msg);
+      }
+      return;
+    }
+
     ros::WallTime start = ros::WallTime::now();
 
     // CSM is used in the following way:

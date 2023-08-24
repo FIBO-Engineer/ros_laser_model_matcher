@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(laser_scan_matcher)
+project(ros_laser_model_matcher)
 
 # List C++ dependencies on ros packages
 set( ROS_CXX_DEPENDENCIES
@@ -27,7 +27,7 @@ link_directories(${csm_LIBRARY_DIRS})
 # Declare info that other packages need to import library generated here
 catkin_package(
     INCLUDE_DIRS include
-    LIBRARIES laser_scan_matcher
+    LIBRARIES laser_model_matcher
     CATKIN_DEPENDS ${ROS_CXX_DEPENDENCIES}
 )
 

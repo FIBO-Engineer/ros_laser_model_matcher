@@ -1,15 +1,16 @@
 <package>
-  <name>laser_scan_matcher</name>
+  <name>ros_laser_model_matcher</name>
   <version>0.4.0</version>
   <description>
-    <p>
-     An incremental laser scan matcher, using Andrea Censi's Canonical Scan Matcher (CSM) implementation. See <a href="http://censi.mit.edu/software/csm/">the web site</a> for more about CSM. NOTE the CSM library is licensed under the GNU Lesser General Public License v3, whereas the rest of the code is released under the BSD license.
-    </p>
+    <p> An incremental laser scan matcher, using Andrea Censi's Canonical Scan Matcher (CSM)
+      implementation. See <a href="http://censi.mit.edu/software/csm/">the web site</a> for more
+      about CSM. NOTE the CSM library is licensed under the GNU Lesser General Public License v3,
+      whereas the rest of the code is released under the BSD license. </p>
   </description>
   <maintainer email="cjaramillo@gc.cuny.edu">Carlos</maintainer>
   <maintainer email="130s@2000.jukuin.keio.ac.jp">Isaac I.Y. Saito</maintainer>
 
-  <url>http://wiki.ros.org/laser_scan_matcher</url>
+  <!-- <url>http://wiki.ros.org/ros_laser_model_matcher</url> -->
   <author email="ccnyroboticslab@gmail.com">Ivan Dryanovski</author>
   <author>William Morris</author>
   <author>Andrea Censi</author>

@@ -3,22 +3,26 @@ Example launch file: launches the scan matcher with pre-recorded data
 -->
 
 <launch>
-  <arg name="publish_covariance" default="true"/>
+  <arg name="publish_covariance" default="true" />
 
   <group if="$(arg publish_covariance)">
-    <param name="laser_scan_matcher_node/do_compute_covariance" value="1"/>
-    <param name="laser_scan_matcher_node/publish_pose_with_covariance" value="true"/>
-    <param name="laser_scan_matcher_node/publish_pose_with_covariance_stamped" value="true"/>
+    <param name="laser_scan_matcher_node/do_compute_covariance" value="1" />
+    <param name="laser_scan_matcher_node/publish_pose_with_covariance" value="true" />
+    <param name="laser_scan_matcher_node/publish_pose_with_covariance_stamped" value="true" />
   </group>
 
-  <node pkg="laser_scan_matcher" type="laser_scan_matcher_node"
-    name="laser_scan_matcher_node" output="screen">
-    <param name="max_iterations" value="10"/>
-    <param name="publish_tf" value="true"/>
-    <param name="model_path" value="/home/mini/catkin_ws/src/scan_tools/model/fibo_paper_elevator.pcd"/>
-    <param name="init_x_in_fixed" value="-1.5"/>
+  <node pkg="pcl_ros" type="pcd_to_pointcloud" name="pcd_to_pointcloud" output="screen"
+    args="$(find ros_laser_model_matcher)/model/front_only.pcd 0.25">
+    <param name="frame_id" value="anchor" />
   </node>
 
-  
+  <node pkg="ros_laser_model_matcher" type="laser_scan_matcher_node"
+    name="laser_scan_matcher_node" output="screen">
+    <param name="max_iterations" value="10" />
+    <param name="publish_tf" value="true" />
+    <param name="model_path"
+      value="$(find ros_laser_model_matcher)/model/front_only.pcd" />
+  </node>
+
 
 </launch>
