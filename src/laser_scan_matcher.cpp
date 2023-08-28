@@ -147,30 +147,7 @@ namespace scan_tools
     if (!nh_private_.getParam("fixed_frame", fixed_frame_))
       fixed_frame_ = "anchor";
 
-    if (nh_private_.getParam("model_path", model_path_))
-    {
-      if (pcl::io::loadPCDFile<pcl::PointXYZ>(model_path_, *model_cloud_) == -1) //* load the file
-      {
-        ROS_FATAL("Couldn't read model file %s", model_path_.c_str());
-      }
-      else
-      {
-        ROS_INFO("Model loaded successfully.");
-      }
-    }
-    else
-    {
-      ROS_FATAL("Model PCD Path is not specified, the program will not work as expected.");
-    }
-
-    PointCloudToLDP(model_cloud_, model_ldp_);
-
-    model_ldp_->estimate[0] = 0.0;
-    model_ldp_->estimate[1] = 0.0;
-    model_ldp_->estimate[2] = 0.0;
-
-    input_.laser_ref = model_ldp_;
-
+    initModel();
     // **** input type - laser scan, or point clouds?
     // if false, will subscribe to LaserScan msgs on /scan.
     // if true, will subscribe to PointCloud2 msgs on /cloud
@@ -747,6 +724,126 @@ namespace scan_tools
 
     ldp->min_theta = ldp->theta[0];
     ldp->max_theta = ldp->theta[n - 1];
+
+    ldp->odometry[0] = 0.0;
+    ldp->odometry[1] = 0.0;
+    ldp->odometry[2] = 0.0;
+
+    ldp->true_pose[0] = 0.0;
+    ldp->true_pose[1] = 0.0;
+    ldp->true_pose[2] = 0.0;
+  }
+
+  void LaserScanMatcher::initModel()
+  {
+    /* Code borrowed from
+https://github.com/ros-perception/pointcloud_to_laserscan/blob/lunar-devel/src/pointcloud_to_laserscan_nodelet.cpp */
+    nh_private_.param<double>("transform_tolerance", tolerance_, 0.01);
+    nh_private_.param<double>("min_height", min_height_, std::numeric_limits<double>::min());
+    nh_private_.param<double>("max_height", max_height_, std::numeric_limits<double>::max());
+    nh_private_.param<double>("angle_min", angle_min_, -M_PI);
+    nh_private_.param<double>("angle_max", angle_max_, M_PI);
+    nh_private_.param<double>("angle_increment", angle_increment_, M_PI / 180.0);
+    nh_private_.param<double>("scan_time", scan_time_, 1.0 / 30.0);
+    nh_private_.param<double>("range_min", range_min_, 0.0);
+    nh_private_.param<double>("range_max", range_max_, std::numeric_limits<double>::max());
+
+    if (nh_private_.getParam("model_path", model_path_))
+    {
+      if (pcl::io::loadPCDFile<pcl::PointXYZ>(model_path_, *model_cloud_) == -1) //* load the file
+      {
+        ROS_FATAL("Couldn't read model file %s", model_path_.c_str());
+      }
+      else
+      {
+        ROS_INFO("Model loaded successfully.");
+      }
+    }
+    else
+    {
+      ROS_FATAL("Model PCD Path is not specified, the program will not work as expected.");
+    }
+
+    PCDToLDP(model_cloud_, model_ldp_);
+
+    model_ldp_->estimate[0] = 0.0;
+    model_ldp_->estimate[1] = 0.0;
+    model_ldp_->estimate[2] = 0.0;
+
+    input_.laser_ref = model_ldp_;
+  }
+
+  void LaserScanMatcher::PCDToLDP(const pcl::PointCloud<pcl::PointXYZ>::Ptr pcd_cloud, LDP &ldp)
+  {
+    // build laserscan output
+    // sensor_msgs::LaserScan output;
+    // output.angle_min = angle_min_;
+    // output.angle_max = angle_max_;
+    // output.angle_increment = angle_increment_;
+    // output.time_increment = 0.0;
+    // output.scan_time = scan_time_;
+    // output.range_min = range_min_;
+    // output.range_max = range_max_;
+
+    // determine amount of rays to create
+    uint32_t ranges_size = std::ceil((angle_max_ - angle_min_) / angle_increment_);
+    ldp = ld_alloc_new(ranges_size);
+    ldp->min_theta = angle_min_;
+    ldp->max_theta = angle_max_;
+
+    for (size_t index = 0; index < ranges_size; index++)
+    {
+      // overwrite range at laserscan ray if new range is smaller
+      ldp->valid[index] = 0;
+      ldp->theta[index] = angle_min_ + index * angle_increment_;
+      ldp->cluster[index] = -1;
+    }
+    // Iterate through pointcloud
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr
+
+    for (auto it = pcd_cloud->begin(); it != pcd_cloud->end(); ++it)
+    {
+      if (std::isnan(it->x) || std::isnan(it->y) || std::isnan(it->z))
+      {
+        ROS_WARN("rejected for nan in point(%f, %f, %f)", it->x, it->y, it->z);
+        continue;
+      }
+
+      if (it->z > max_height_ || it->z < min_height_)
+      {
+        ROS_WARN("rejected for height %f not in range (%f, %f)\n", it->z, min_height_, max_height_);
+        continue;
+      }
+
+      double range = hypot(it->x, it->y);
+      if (range < range_min_)
+      {
+        ROS_WARN("rejected for range %f below minimum value %f. Point: (%f, %f, %f)", range, range_min_, it->x,
+                 it->y, it->z);
+        continue;
+      }
+      if (range > range_max_)
+      {
+        ROS_WARN("rejected for range %f above maximum value %f. Point: (%f, %f, %f)", range, range_max_, it->x,
+                 it->y, it->z);
+        continue;
+      }
+
+      double angle = atan2(it->y, it->x);
+      if (angle < angle_min_ || angle > angle_max_)
+      {
+        ROS_WARN("rejected for angle %f not in range (%f, %f)\n", angle, angle_min_, angle_max_);
+        continue;
+      }
+
+      int index = (angle - angle_min_) / angle_increment_;
+
+      if (!ldp->valid[index] || (ldp->valid[index] && range < ldp->readings[index]))
+      {
+        ldp->readings[index] = range;
+        ldp->valid[index] = 1;
+      }
+    }
 
     ldp->odometry[0] = 0.0;
     ldp->odometry[1] = 0.0;

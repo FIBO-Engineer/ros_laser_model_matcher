@@ -104,6 +104,16 @@ namespace scan_tools
     std::string model_path_;
     pcl::PointCloud<pcl::PointXYZ>::Ptr model_cloud_;
     LDP model_ldp_;
+    double tolerance_;
+    double min_height_;
+    double max_height_;
+    double angle_min_;
+    double angle_max_;
+    double angle_increment_;
+    double scan_time_;
+    double range_min_;
+    double range_max_;
+
     bool is_enabled_;
 
     double cloud_range_min_;
@@ -162,12 +172,14 @@ namespace scan_tools
     // **** methods
 
     void initParams();
+    void initModel();
     void processScan(LDP &curr_ldp_scan, const ros::Time &time);
 
     void laserScanToLDP(const sensor_msgs::LaserScan::ConstPtr &scan_msg,
                         LDP &ldp);
     void PointCloudToLDP(const PointCloudT::ConstPtr &cloud,
                          LDP &ldp);
+    void PCDToLDP(const pcl::PointCloud<pcl::PointXYZ>::Ptr pcd_cloud, LDP &ldp);
 
     void scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan_msg);
     void cloudCallback(const PointCloudT::ConstPtr &cloud);

@@ -4,7 +4,7 @@ Example launch file: launches the scan matcher with pre-recorded data
 
 <launch>
   <arg name="publish_covariance" default="true" />
-  <arg name="pcd_path" default="$(find ros_laser_model_matcher)/model/merge/1692886991973653.pcd" />
+  <arg name="pcd_path" default="$(find ros_laser_model_matcher)/model/front/1693215526355660.pcd" />
 
   <group if="$(arg publish_covariance)">
     <param name="laser_scan_matcher_node/do_compute_covariance" value="1" />
@@ -19,7 +19,7 @@ Example launch file: launches the scan matcher with pre-recorded data
   </node>
 
   <!-- 2. Convert pointcloud to laser scan -->
-  <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node"
+  <!-- <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node"
     name="pointcloud_to_laserscan" output="screen">
     <param name="angle_min" value="-3.14159" />
     <param name="angle_max" value="3.14159" />
@@ -27,15 +27,23 @@ Example launch file: launches the scan matcher with pre-recorded data
     <param name="scan_time" value="0.05" />
     <param name="range_min" value="0.01" />
     <param name="range_max" value="50.0" />
-  </node>
+  </node> -->
 
   <!-- 3. ICP -->
   <node pkg="ros_laser_model_matcher" type="laser_scan_matcher_node"
     name="laser_scan_matcher_node" output="screen">
+    <remap from="/scan" to="front_sensor/scan" />
     <param name="max_iterations" value="10" />
     <param name="publish_tf" value="true" />
-    <param name="model_path"
-      value="$(arg pcd_path)" />
+    <param name="model_path" value="$(arg pcd_path)" />
+    <param name="angle_min" value="-3.14159" />
+    <param name="angle_max" value="3.14159" />
+    <param name="angle_increment" value="0.00581718236207962" />
+    <param name="scan_time" value="0.06666667014360428" />
+    <param name="min_height" value="-0.1" />
+    <param name="max_height" value="0.1" />
+    <param name="range_min" value="0.05" />
+    <param name="range_max" value="100.0" />
   </node>
 
 
