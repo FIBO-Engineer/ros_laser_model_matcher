@@ -75,6 +75,7 @@ namespace scan_tools
     enable_matching_service_ = nh_.advertiseService("enable_matching", &LaserScanMatcher::enableMatchingCallback, this);
 
     // **** publishers
+    model_publisher_ = nh_.advertise<sensor_msgs::LaserScan>("laser_model", 5);
 
     if (publish_pose_)
     {
@@ -144,26 +145,23 @@ namespace scan_tools
   {
     if (!nh_private_.getParam("base_frame", base_frame_))
       base_frame_ = "base_link";
-    if (!nh_private_.getParam("fixed_frame", fixed_frame_))
-      fixed_frame_ = "anchor";
+    if (!nh_private_.getParam("fixed_frame", base_fixed_frame_))
+      base_fixed_frame_ = "base_anchor";
+    if (!nh_private_.getParam("laser_fixed_frame", laser_fixed_frame_))
+      laser_fixed_frame_ = "laser_anchor";
 
-    if (nh_private_.getParam("model_path", model_path_))
-    {
-      if (pcl::io::loadPCDFile<pcl::PointXYZ>(model_path_, *model_cloud_) == -1) //* load the file
-      {
-        ROS_FATAL("Couldn't read model file %s", model_path_.c_str());
-      }
-      else
-      {
-        ROS_INFO("Model loaded successfully.");
-      }
-    }
-    else
-    {
-      ROS_FATAL("Model PCD Path is not specified, the program will not work as expected.");
-    }
-
-    PointCloudToLDP(model_cloud_, model_ldp_);
+    laser_model.header.frame_id = laser_fixed_frame_;
+    nh_private_.getParam("angle_min", laser_model.angle_min);
+    nh_private_.getParam("angle_max", laser_model.angle_max);
+    nh_private_.getParam("angle_increment", laser_model.angle_increment);
+    nh_private_.getParam("time_increment", laser_model.time_increment);
+    nh_private_.getParam("scan_time", laser_model.scan_time);
+    nh_private_.getParam("range_min", laser_model.range_min);
+    nh_private_.getParam("range_max", laser_model.range_max);
+    nh_private_.getParam("ranges", laser_model.ranges);
+    nh_private_.getParam("intensities", laser_model.intensities);
+    sensor_msgs::LaserScan::ConstPtr laser_model_cptr = boost::make_shared<sensor_msgs::LaserScan>(laser_model);
+    laserScanToLDP(laser_model_cptr, model_ldp_);
 
     model_ldp_->estimate[0] = 0.0;
     model_ldp_->estimate[1] = 0.0;
@@ -406,6 +404,7 @@ namespace scan_tools
     if (!initialized_)
     {
       // cache the static tf from base to laser
+      // laser_model.header.frame_id = base_fixed_frame_;
       if (!getBaseLaserTransform(cloud_header.frame_id))
       {
         ROS_WARN("Skipping scan");
@@ -477,12 +476,18 @@ namespace scan_tools
 
   void LaserScanMatcher::processScan(LDP &curr_ldp_scan, const ros::Time &time)
   {
+    laser_model.header.stamp = ros::Time::now();
+    model_publisher_.publish(laser_model);
+
     if (!is_enabled_)
     {
-      if (publish_tf_)
+      if (publish_tf_) // TODO: fix this, maybe on separate thread
       {
-        tf::StampedTransform transform_msg(last_base_in_fixed_.inverse(), time, base_frame_, fixed_frame_);
-        tf_broadcaster_.sendTransform(transform_msg);
+        tf::Transform last_fixed_in_base = last_base_in_fixed_.inverse();
+        std::vector<tf::StampedTransform> tfs;
+        tfs.push_back(tf::StampedTransform(last_fixed_in_base, time, base_frame_, base_fixed_frame_));
+        tfs.push_back(tf::StampedTransform(base_from_laser_, time, base_fixed_frame_, laser_fixed_frame_));
+        tf_broadcaster_.sendTransform(tfs);
       }
       return;
     }
@@ -508,11 +513,12 @@ namespace scan_tools
 
     // prev and last used interchangably
     // convert the predicted offset from the prev base frame to be in the prev laser frame
-    tf::Transform pred_laser_offset = laser_from_base_ * pred_last_base_offset * base_from_laser_;
+    // tf::Transform pred_laser = last_base_in_fixed_ * pred_last_base_offset * base_from_laser_;
+    tf::Transform pred_laser = laser_from_base_ * last_base_in_fixed_ * base_from_laser_;
 
-    input_.first_guess[0] = pred_laser_offset.getOrigin().getX();
-    input_.first_guess[1] = pred_laser_offset.getOrigin().getY();
-    input_.first_guess[2] = tf::getYaw(pred_laser_offset.getRotation());
+    input_.first_guess[0] = pred_laser.getOrigin().getX();
+    input_.first_guess[1] = pred_laser.getOrigin().getY();
+    input_.first_guess[2] = tf::getYaw(pred_laser.getRotation());
 
     // If they are non-Null, free covariance gsl matrices to avoid leaking memory
     if (output_.cov_x_m)
@@ -534,20 +540,21 @@ namespace scan_tools
     // *** scan match - using point to line icp from CSM
 
     sm_icp(&input_, &output_);
-    tf::Transform meas_base_offset;
+    // tf::Transform meas_base_offset;
 
     if (output_.valid)
     {
 
       // the measured offset of the scan from the prev in the prev laser frame
-      tf::Transform meas_laser_offset;
-      createTfFromXYTheta(output_.x[0], output_.x[1], output_.x[2], meas_laser_offset);
+      tf::Transform meas_laser;
+      createTfFromXYTheta(output_.x[0], output_.x[1], output_.x[2], meas_laser);
 
+      ROS_WARN("%f %f %f", output_.x[0], output_.x[1], output_.x[2]);
       // convert the measured offset from the prev laser frame to the prev base frame
-      meas_base_offset = base_from_laser_ * meas_laser_offset * laser_from_base_;
+      // meas_base_offset = base_from_laser_ * meas_laser_offset * laser_from_base_;
 
       // calculate the measured pose of the scan in the fixed frame
-      last_base_in_fixed_ = last_base_in_fixed_ * meas_base_offset;
+      last_base_in_fixed_ = base_from_laser_ * meas_laser * laser_from_base_; // last_base_in_fixed_ * meas_base_offset;
       tf::Transform last_fixed_in_base = last_base_in_fixed_.inverse();
 
       // **** publish
@@ -626,13 +633,15 @@ namespace scan_tools
 
       if (publish_tf_)
       {
-        tf::StampedTransform transform_msg(last_fixed_in_base, time, base_frame_, fixed_frame_);
-        tf_broadcaster_.sendTransform(transform_msg);
+        std::vector<tf::StampedTransform> tfs;
+        tfs.push_back(tf::StampedTransform(last_fixed_in_base, time, base_frame_, base_fixed_frame_));
+        tfs.push_back(tf::StampedTransform(base_from_laser_, time, base_fixed_frame_, laser_fixed_frame_));
+        tf_broadcaster_.sendTransform(tfs);
       }
     }
     else
     {
-      meas_base_offset.setIdentity();
+      // meas_base_offset.setIdentity();
       ROS_WARN("Error in scan matching");
     }
 
@@ -844,8 +853,8 @@ namespace scan_tools
       tf::StampedTransform pred_last_base_offset_tf;
       try
       {
-        tf_listener_.waitForTransform(base_frame_, last_icp_time_, base_frame_, stamp, fixed_frame_, ros::Duration(tf_timeout_));
-        tf_listener_.lookupTransform(base_frame_, last_icp_time_, base_frame_, stamp, fixed_frame_, pred_last_base_offset_tf);
+        tf_listener_.waitForTransform(base_frame_, last_icp_time_, base_frame_, stamp, base_fixed_frame_, ros::Duration(tf_timeout_));
+        tf_listener_.lookupTransform(base_frame_, last_icp_time_, base_frame_, stamp, base_fixed_frame_, pred_last_base_offset_tf);
         pred_last_base_offset = pred_last_base_offset_tf;
       }
       catch (const tf::TransformException &ex)

@@ -92,6 +92,8 @@ namespace scan_tools
     tf::Transform base_from_laser_; // static, cached
     tf::Transform laser_from_base_; // static, cached
 
+    ros::Publisher model_publisher_;
+
     ros::Publisher pose_publisher_;
     ros::Publisher pose_stamped_publisher_;
     ros::Publisher pose_with_covariance_publisher_;
@@ -100,11 +102,13 @@ namespace scan_tools
     // **** parameters
 
     std::string base_frame_;
-    std::string fixed_frame_;
+    std::string base_fixed_frame_;
+    std::string laser_fixed_frame_;
     std::string model_path_;
     pcl::PointCloud<pcl::PointXYZ>::Ptr model_cloud_;
     LDP model_ldp_;
     bool is_enabled_;
+    sensor_msgs::LaserScan laser_model;
 
     double cloud_range_min_;
     double cloud_range_max_;
