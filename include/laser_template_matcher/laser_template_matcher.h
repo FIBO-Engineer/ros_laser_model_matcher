@@ -35,8 +35,8 @@
  *  on Robotics and Automation (ICRA), 2008
  */
 
-#ifndef LASER_SCAN_MATCHER_LASER_SCAN_MATCHER_H
-#define LASER_SCAN_MATCHER_LASER_SCAN_MATCHER_H
+#ifndef LASER_TEMPLATE_MATCHER_LASER_TEMPLATE_MATCHER_H
+#define LASER_TEMPLATE_MATCHER_LASER_TEMPLATE_MATCHER_H
 
 #include <ros/ros.h>
 #include <std_srvs/SetBool.h>
@@ -63,11 +63,11 @@
 namespace scan_tools
 {
 
-  class LaserScanMatcher
+  class LaserTemplateMatcher
   {
   public:
-    LaserScanMatcher(ros::NodeHandle nh, ros::NodeHandle nh_private);
-    ~LaserScanMatcher();
+    LaserTemplateMatcher(ros::NodeHandle nh, ros::NodeHandle nh_private);
+    ~LaserTemplateMatcher();
 
   private:
     typedef pcl::PointXYZ PointT;
@@ -205,4 +205,4 @@ namespace scan_tools
 
 } // namespace scan_tools
 
-#endif // LASER_SCAN_MATCHER_LASER_SCAN_MATCHER_H
+#endif // LASER_TEMPLATE_MATCHER_LASER_TEMPLATE_MATCHER_H

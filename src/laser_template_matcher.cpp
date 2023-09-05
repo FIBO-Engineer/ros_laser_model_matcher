@@ -35,7 +35,7 @@
  *  on Robotics and Automation (ICRA), 2008
  */
 
-#include <laser_scan_matcher/laser_scan_matcher.h>
+#include <laser_template_matcher/laser_template_matcher.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/io/pcd_io.h>
 #include <boost/assign.hpp>
@@ -44,16 +44,16 @@
 namespace scan_tools
 {
 
-  LaserScanMatcher::LaserScanMatcher(ros::NodeHandle nh, ros::NodeHandle nh_private) : nh_(nh),
-                                                                                       nh_private_(nh_private),
-                                                                                       initialized_(false),
-                                                                                       received_imu_(false),
-                                                                                       received_odom_(false),
-                                                                                       received_vel_(false),
-                                                                                       is_enabled_(false),
-                                                                                       model_cloud_(new pcl::PointCloud<pcl::PointXYZ>())
+  LaserTemplateMatcher::LaserTemplateMatcher(ros::NodeHandle nh, ros::NodeHandle nh_private) : nh_(nh),
+                                                                                               nh_private_(nh_private),
+                                                                                               initialized_(false),
+                                                                                               received_imu_(false),
+                                                                                               received_odom_(false),
+                                                                                               received_vel_(false),
+                                                                                               is_enabled_(false),
+                                                                                               model_cloud_(new pcl::PointCloud<pcl::PointXYZ>())
   {
-    ROS_INFO("Starting LaserScanMatcher");
+    ROS_INFO("Starting LaserTemplateMatcher");
 
     // **** init parameters
 
@@ -72,7 +72,7 @@ namespace scan_tools
     output_.dx_dy2_m = 0;
 
     // **** services
-    enable_matching_service_ = nh_.advertiseService("enable_matching", &LaserScanMatcher::enableMatchingCallback, this);
+    enable_matching_service_ = nh_.advertiseService("enable_matching", &LaserTemplateMatcher::enableMatchingCallback, this);
 
     // **** publishers
     model_publisher_ = nh_.advertise<sensor_msgs::LaserScan>("laser_model", 5);
@@ -102,46 +102,46 @@ namespace scan_tools
     }
 
     // *** subscribers
-    estimate_model_pose_subscriber_ = nh_.subscribe("estimate_model_pose", 1, &LaserScanMatcher::estimateModelPoseCallback, this);
+    estimate_model_pose_subscriber_ = nh_.subscribe("estimate_model_pose", 1, &LaserTemplateMatcher::estimateModelPoseCallback, this);
 
     if (use_cloud_input_)
     {
       cloud_subscriber_ = nh_.subscribe(
-          "cloud", 1, &LaserScanMatcher::cloudCallback, this);
+          "cloud", 1, &LaserTemplateMatcher::cloudCallback, this);
     }
     else
     {
       scan_subscriber_ = nh_.subscribe(
-          "scan", 1, &LaserScanMatcher::scanCallback, this);
+          "scan", 1, &LaserTemplateMatcher::scanCallback, this);
     }
 
     if (use_imu_)
     {
       imu_subscriber_ = nh_.subscribe(
-          "imu/data", 1, &LaserScanMatcher::imuCallback, this);
+          "imu/data", 1, &LaserTemplateMatcher::imuCallback, this);
     }
     if (use_odom_)
     {
       odom_subscriber_ = nh_.subscribe(
-          "odom", 1, &LaserScanMatcher::odomCallback, this);
+          "odom", 1, &LaserTemplateMatcher::odomCallback, this);
     }
     if (use_vel_)
     {
       if (stamped_vel_)
         vel_subscriber_ = nh_.subscribe(
-            "vel", 1, &LaserScanMatcher::velStmpCallback, this);
+            "vel", 1, &LaserTemplateMatcher::velStmpCallback, this);
       else
         vel_subscriber_ = nh_.subscribe(
-            "vel", 1, &LaserScanMatcher::velCallback, this);
+            "vel", 1, &LaserTemplateMatcher::velCallback, this);
     }
   }
 
-  LaserScanMatcher::~LaserScanMatcher()
+  LaserTemplateMatcher::~LaserTemplateMatcher()
   {
-    ROS_INFO("Destroying LaserScanMatcher");
+    ROS_INFO("Destroying LaserTemplateMatcher");
   }
 
-  void LaserScanMatcher::initParams()
+  void LaserTemplateMatcher::initParams()
   {
     if (!nh_private_.getParam("base_frame", base_frame_))
       base_frame_ = "base_link";
@@ -357,7 +357,7 @@ namespace scan_tools
       input_.use_sigma_weights = 0;
   }
 
-  void LaserScanMatcher::imuCallback(const sensor_msgs::Imu::ConstPtr &imu_msg)
+  void LaserTemplateMatcher::imuCallback(const sensor_msgs::Imu::ConstPtr &imu_msg)
   {
     boost::mutex::scoped_lock(mutex_);
     latest_imu_msg_ = *imu_msg;
@@ -368,7 +368,7 @@ namespace scan_tools
     }
   }
 
-  void LaserScanMatcher::odomCallback(const nav_msgs::Odometry::ConstPtr &odom_msg)
+  void LaserTemplateMatcher::odomCallback(const nav_msgs::Odometry::ConstPtr &odom_msg)
   {
     boost::mutex::scoped_lock(mutex_);
     latest_odom_msg_ = *odom_msg;
@@ -379,7 +379,7 @@ namespace scan_tools
     }
   }
 
-  void LaserScanMatcher::velCallback(const geometry_msgs::Twist::ConstPtr &twist_msg)
+  void LaserTemplateMatcher::velCallback(const geometry_msgs::Twist::ConstPtr &twist_msg)
   {
     boost::mutex::scoped_lock(mutex_);
     latest_vel_msg_ = *twist_msg;
@@ -387,7 +387,7 @@ namespace scan_tools
     received_vel_ = true;
   }
 
-  void LaserScanMatcher::velStmpCallback(const geometry_msgs::TwistStamped::ConstPtr &twist_msg)
+  void LaserTemplateMatcher::velStmpCallback(const geometry_msgs::TwistStamped::ConstPtr &twist_msg)
   {
     boost::mutex::scoped_lock(mutex_);
     latest_vel_msg_ = twist_msg->twist;
@@ -395,7 +395,7 @@ namespace scan_tools
     received_vel_ = true;
   }
 
-  void LaserScanMatcher::cloudCallback(const PointCloudT::ConstPtr &cloud)
+  void LaserTemplateMatcher::cloudCallback(const PointCloudT::ConstPtr &cloud)
   {
     // **** if first scan, cache the tf from base to the scanner
 
@@ -420,7 +420,7 @@ namespace scan_tools
     processScan(curr_ldp_scan, cloud_header.stamp);
   }
 
-  void LaserScanMatcher::scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan_msg)
+  void LaserTemplateMatcher::scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan_msg)
   {
     // **** if first scan, cache the tf from base to the scanner
 
@@ -444,7 +444,7 @@ namespace scan_tools
     processScan(curr_ldp_scan, scan_msg->header.stamp);
   }
 
-  void LaserScanMatcher::estimateModelPoseCallback(const geometry_msgs::PoseStamped::ConstPtr &model_pose_msg)
+  void LaserTemplateMatcher::estimateModelPoseCallback(const geometry_msgs::PoseStamped::ConstPtr &model_pose_msg)
   {
     boost::mutex::scoped_lock(mutex_);
     tf::StampedTransform msg_from_base;
@@ -465,16 +465,16 @@ namespace scan_tools
     ROS_INFO("Successfully set new anchor point");
   }
 
-  bool LaserScanMatcher::enableMatchingCallback(std_srvs::SetBool::Request &req,
-                                                std_srvs::SetBool::Response &res)
+  bool LaserTemplateMatcher::enableMatchingCallback(std_srvs::SetBool::Request &req,
+                                                    std_srvs::SetBool::Response &res)
   {
     is_enabled_ = req.data;
     res.success = true;
-    res.message = "LaserScanMatcher is now " + std::string(is_enabled_ ? "enabled" : "disabled");
+    res.message = "LaserTemplateMatcher is now " + std::string(is_enabled_ ? "enabled" : "disabled");
     return true;
   }
 
-  void LaserScanMatcher::processScan(LDP &curr_ldp_scan, const ros::Time &time)
+  void LaserTemplateMatcher::processScan(LDP &curr_ldp_scan, const ros::Time &time)
   {
     laser_model.header.stamp = ros::Time::now();
     model_publisher_.publish(laser_model);
@@ -665,8 +665,8 @@ namespace scan_tools
     ROS_DEBUG("Scan matcher total duration: %.1f ms", dur);
   }
 
-  void LaserScanMatcher::PointCloudToLDP(const PointCloudT::ConstPtr &cloud,
-                                         LDP &ldp)
+  void LaserTemplateMatcher::PointCloudToLDP(const PointCloudT::ConstPtr &cloud,
+                                             LDP &ldp)
   {
     double max_d2 = cloud_res_ * cloud_res_;
 
@@ -734,8 +734,8 @@ namespace scan_tools
     ldp->true_pose[2] = 0.0;
   }
 
-  void LaserScanMatcher::laserScanToLDP(const sensor_msgs::LaserScan::ConstPtr &scan_msg,
-                                        LDP &ldp)
+  void LaserTemplateMatcher::laserScanToLDP(const sensor_msgs::LaserScan::ConstPtr &scan_msg,
+                                            LDP &ldp)
   {
     unsigned int n = scan_msg->ranges.size();
     ldp = ld_alloc_new(n);
@@ -776,7 +776,7 @@ namespace scan_tools
     ldp->true_pose[2] = 0.0;
   }
 
-  void LaserScanMatcher::createCache(const sensor_msgs::LaserScan::ConstPtr &scan_msg)
+  void LaserTemplateMatcher::createCache(const sensor_msgs::LaserScan::ConstPtr &scan_msg)
   {
     a_cos_.clear();
     a_sin_.clear();
@@ -792,7 +792,7 @@ namespace scan_tools
     input_.max_reading = scan_msg->range_max;
   }
 
-  bool LaserScanMatcher::getBaseLaserTransform(const std::string &frame_id)
+  bool LaserTemplateMatcher::getBaseLaserTransform(const std::string &frame_id)
   {
     tf::StampedTransform base_from_laser;
     try
@@ -812,7 +812,7 @@ namespace scan_tools
   }
 
   // returns the predicted offset from the base pose of the last scan
-  tf::Transform LaserScanMatcher::getPrediction(const ros::Time &stamp)
+  tf::Transform LaserTemplateMatcher::getPrediction(const ros::Time &stamp)
   {
     boost::mutex::scoped_lock(mutex_);
 
@@ -876,7 +876,7 @@ namespace scan_tools
     return pred_last_base_offset;
   }
 
-  void LaserScanMatcher::createTfFromXYTheta(
+  void LaserTemplateMatcher::createTfFromXYTheta(
       double x, double y, double theta, tf::Transform &t)
   {
     t.setOrigin(tf::Vector3(x, y, 0.0));
@@ -885,7 +885,7 @@ namespace scan_tools
     t.setRotation(q);
   }
 
-  Eigen::Matrix2f LaserScanMatcher::getLaserRotation(const tf::Transform &odom_pose) const
+  Eigen::Matrix2f LaserTemplateMatcher::getLaserRotation(const tf::Transform &odom_pose) const
   {
     tf::Transform laser_in_fixed = odom_pose * laser_from_base_;
     tf::Matrix3x3 fixed_from_laser_rot(laser_in_fixed.getRotation());

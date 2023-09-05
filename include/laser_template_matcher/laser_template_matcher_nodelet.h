@@ -35,14 +35,26 @@
  *  on Robotics and Automation (ICRA), 2008
  */
 
-#include <laser_scan_matcher/laser_scan_matcher.h>
+#ifndef LASER_TEMPLATE_MATCHER_LASER_TEMPLATE_MATCHER_NODELET_H
+#define LASER_TEMPLATE_MATCHER_LASER_TEMPLATE_MATCHER_NODELET_H
 
-int main(int argc, char** argv)
+#include <nodelet/nodelet.h>
+#include <pluginlib/class_list_macros.h>
+
+#include <laser_template_matcher/laser_template_matcher.h>
+
+namespace scan_tools
 {
-  ros::init(argc, argv, "LaserScanMatcher");
-  ros::NodeHandle nh;
-  ros::NodeHandle nh_private("~");
-  scan_tools::LaserScanMatcher laser_scan_matcher(nh, nh_private);
-  ros::spin();
-  return 0;
-}
+
+  class LaserTemplateMatcherNodelet : public nodelet::Nodelet
+  {
+  public:
+    virtual void onInit();
+
+  private:
+    boost::shared_ptr<LaserTemplateMatcher> scan_matcher_;
+  };
+
+} // namespace scan_tools
+
+#endif // LASER_TEMPLATE_MATCHER_LASER_TEMPLATE_MATCHER_NODELET_H
