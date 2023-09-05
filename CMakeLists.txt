@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(ros_laser_model_matcher)
+project(ros_laser_template_matcher)
 
 # List C++ dependencies on ros packages
 set( ROS_CXX_DEPENDENCIES
