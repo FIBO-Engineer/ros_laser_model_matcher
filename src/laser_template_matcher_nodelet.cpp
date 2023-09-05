@@ -35,21 +35,20 @@
  *  on Robotics and Automation (ICRA), 2008
  */
 
-#include <laser_scan_matcher/laser_scan_matcher_nodelet.h>
+#include <laser_template_matcher/laser_template_matcher_nodelet.h>
 
-typedef scan_tools::LaserScanMatcherNodelet LaserScanMatcherNodelet;
+typedef scan_tools::LaserTemplateMatcherNodelet LaserTemplateMatcherNodelet;
 
-PLUGINLIB_EXPORT_CLASS(LaserScanMatcherNodelet, nodelet::Nodelet)
+PLUGINLIB_EXPORT_CLASS(LaserTemplateMatcherNodelet, nodelet::Nodelet)
 
-void LaserScanMatcherNodelet::onInit()
+void LaserTemplateMatcherNodelet::onInit()
 {
-  NODELET_INFO("Initializing LaserScanMatcher Nodelet");
+  NODELET_INFO("Initializing LaserTemplateMatcher Nodelet");
 
   // TODO: Do we want the single threaded or multithreaded NH?
-  ros::NodeHandle nh         = getMTNodeHandle();
+  ros::NodeHandle nh = getMTNodeHandle();
   ros::NodeHandle nh_private = getMTPrivateNodeHandle();
 
-  scan_matcher_ = boost::shared_ptr<LaserScanMatcher>(
-    new LaserScanMatcher(nh, nh_private));
+  scan_matcher_ = boost::shared_ptr<LaserTemplateMatcher>(
+      new LaserTemplateMatcher(nh, nh_private));
 }
-

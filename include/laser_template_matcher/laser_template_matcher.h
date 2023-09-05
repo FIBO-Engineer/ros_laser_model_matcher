@@ -35,10 +35,11 @@
  *  on Robotics and Automation (ICRA), 2008
  */
 
-#ifndef LASER_SCAN_MATCHER_LASER_SCAN_MATCHER_H
-#define LASER_SCAN_MATCHER_LASER_SCAN_MATCHER_H
+#ifndef LASER_TEMPLATE_MATCHER_LASER_TEMPLATE_MATCHER_H
+#define LASER_TEMPLATE_MATCHER_LASER_TEMPLATE_MATCHER_H
 
 #include <ros/ros.h>
+#include <std_srvs/SetBool.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/LaserScan.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -55,23 +56,21 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_ros/point_cloud.h>
 
-#include <csm/csm_all.h>  // csm defines min and max, but Eigen complains
+#include <csm/csm_all.h> // csm defines min and max, but Eigen complains
 #undef min
 #undef max
 
 namespace scan_tools
 {
 
-class LaserScanMatcher
-{
+  class LaserTemplateMatcher
+  {
   public:
-
-    LaserScanMatcher(ros::NodeHandle nh, ros::NodeHandle nh_private);
-    ~LaserScanMatcher();
+    LaserTemplateMatcher(ros::NodeHandle nh, ros::NodeHandle nh_private);
+    ~LaserTemplateMatcher();
 
   private:
-
-    typedef pcl::PointXYZ           PointT;
+    typedef pcl::PointXYZ PointT;
     typedef pcl::PointCloud<PointT> PointCloudT;
 
     // **** ros
@@ -84,22 +83,33 @@ class LaserScanMatcher
     ros::Subscriber odom_subscriber_;
     ros::Subscriber imu_subscriber_;
     ros::Subscriber vel_subscriber_;
+    ros::Subscriber estimate_model_pose_subscriber_;
+    ros::ServiceServer enable_matching_service_;
 
-    tf::TransformListener    tf_listener_;
+    tf::TransformListener tf_listener_;
     tf::TransformBroadcaster tf_broadcaster_;
 
     tf::Transform base_from_laser_; // static, cached
     tf::Transform laser_from_base_; // static, cached
 
-    ros::Publisher  pose_publisher_;
-    ros::Publisher  pose_stamped_publisher_;
-    ros::Publisher  pose_with_covariance_publisher_;
-    ros::Publisher  pose_with_covariance_stamped_publisher_;
+    ros::Publisher model_publisher_;
+
+    ros::Publisher pose_publisher_;
+    ros::Publisher pose_stamped_publisher_;
+    ros::Publisher pose_with_covariance_publisher_;
+    ros::Publisher pose_with_covariance_stamped_publisher_;
 
     // **** parameters
 
     std::string base_frame_;
-    std::string fixed_frame_;
+    std::string base_fixed_frame_;
+    std::string laser_fixed_frame_;
+    std::string model_path_;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr model_cloud_;
+    LDP model_ldp_;
+    bool is_enabled_;
+    sensor_msgs::LaserScan laser_model;
+
     double cloud_range_min_;
     double cloud_range_max_;
     double cloud_res_;
@@ -112,10 +122,6 @@ class LaserScanMatcher
     std::vector<double> orientation_covariance_;
 
     bool use_cloud_input_;
-
-    double kf_dist_linear_;
-    double kf_dist_linear_sq_;
-    double kf_dist_angular_;
 
     // **** What predictions are available to speed up the ICP?
     // 1) imu - [theta] from imu yaw angle - /imu topic
@@ -140,8 +146,7 @@ class LaserScanMatcher
     bool received_odom_;
     bool received_vel_;
 
-    tf::Transform last_base_in_fixed_;     // pose of the base of the last scan in fixed frame
-    tf::Transform keyframe_base_in_fixed_; // pose of the base of last keyframe scan in fixed frame
+    tf::Transform last_base_in_fixed_; // pose of the base of the last scan in fixed frame
 
     ros::Time last_icp_time_;
 
@@ -157,27 +162,30 @@ class LaserScanMatcher
 
     sm_params input_;
     sm_result output_;
-    LDP prev_ldp_scan_;
 
     // **** methods
 
     void initParams();
-    void processScan(LDP& curr_ldp_scan, const ros::Time& time);
+    void processScan(LDP &curr_ldp_scan, const ros::Time &time);
 
-    void laserScanToLDP(const sensor_msgs::LaserScan::ConstPtr& scan_msg,
-                              LDP& ldp);
-    void PointCloudToLDP(const PointCloudT::ConstPtr& cloud,
-                               LDP& ldp);
+    void laserScanToLDP(const sensor_msgs::LaserScan::ConstPtr &scan_msg,
+                        LDP &ldp);
+    void PointCloudToLDP(const PointCloudT::ConstPtr &cloud,
+                         LDP &ldp);
 
-    void scanCallback (const sensor_msgs::LaserScan::ConstPtr& scan_msg);
-    void cloudCallback (const PointCloudT::ConstPtr& cloud);
+    void scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan_msg);
+    void cloudCallback(const PointCloudT::ConstPtr &cloud);
 
-    void odomCallback(const nav_msgs::Odometry::ConstPtr& odom_msg);
-    void imuCallback (const sensor_msgs::Imu::ConstPtr& imu_msg);
-    void velCallback (const geometry_msgs::Twist::ConstPtr& twist_msg);
-    void velStmpCallback(const geometry_msgs::TwistStamped::ConstPtr& twist_msg);
+    void odomCallback(const nav_msgs::Odometry::ConstPtr &odom_msg);
+    void imuCallback(const sensor_msgs::Imu::ConstPtr &imu_msg);
+    void velCallback(const geometry_msgs::Twist::ConstPtr &twist_msg);
+    void velStmpCallback(const geometry_msgs::TwistStamped::ConstPtr &twist_msg);
 
-    void createCache (const sensor_msgs::LaserScan::ConstPtr& scan_msg);
+    void estimateModelPoseCallback(const geometry_msgs::PoseStamped::ConstPtr &model_pose_msg);
+    bool enableMatchingCallback(std_srvs::SetBool::Request &req,
+                                std_srvs::SetBool::Response &res);
+
+    void createCache(const sensor_msgs::LaserScan::ConstPtr &scan_msg);
 
     /**
      * Cache the static transform between the base and laser.
@@ -186,17 +194,15 @@ class LaserScanMatcher
      *
      * @returns True if the transform was found, false otherwise.
      */
-    bool getBaseLaserTransform(const std::string& frame_id);
+    bool getBaseLaserTransform(const std::string &frame_id);
 
-    bool newKeyframeNeeded(const tf::Transform& d);
+    tf::Transform getPrediction(const ros::Time &stamp);
 
-    tf::Transform getPrediction(const ros::Time& stamp);
+    void createTfFromXYTheta(double x, double y, double theta, tf::Transform &t);
 
-    void createTfFromXYTheta(double x, double y, double theta, tf::Transform& t);
-
-    Eigen::Matrix2f getLaserRotation(const tf::Transform& odom_pose) const;
-};
+    Eigen::Matrix2f getLaserRotation(const tf::Transform &odom_pose) const;
+  };
 
 } // namespace scan_tools
 
-#endif // LASER_SCAN_MATCHER_LASER_SCAN_MATCHER_H
+#endif // LASER_TEMPLATE_MATCHER_LASER_TEMPLATE_MATCHER_H
