@@ -549,7 +549,17 @@ namespace scan_tools
       tf::Transform meas_laser;
       createTfFromXYTheta(output_.x[0], output_.x[1], output_.x[2], meas_laser);
 
-      ROS_WARN("%f %f %f", output_.x[0], output_.x[1], output_.x[2]);
+      // static double prev_scan_x, prev_scan_y, prev_scan_theta;
+      // double ex = output_.x[0] - prev_scan_x;
+      // double ey = output_.x[1] - prev_scan_y;
+      // double ea = output_.x[2] - prev_scan_theta;
+      // double en = sqrt(ex * ex + ey * ey);
+
+      // ROS_WARN("Error X: %f, Error Y: %f, Error A: %f, |Error|: %f", ex, ey, ea, en);
+      // prev_scan_x = output_.x[0];
+      // prev_scan_y = output_.x[1];
+      // prev_scan_theta = output_.x[2];
+
       // convert the measured offset from the prev laser frame to the prev base frame
       // meas_base_offset = base_from_laser_ * meas_laser_offset * laser_from_base_;
 
