@@ -5,10 +5,12 @@ Example launch file: launches the scan matcher with pre-recorded data
 <launch>
   <node pkg="ros_laser_template_matcher" type="laser_template_matcher_node"
     name="laser_template_matcher_node" output="screen">
-    <remap from="scan" to="front_sensor/scan" />
+    <!-- <remap from="scan" to="front_sensor/scan" /> -->
+    <remap from="scan" to="/laser_front/scan" />
     <param name="max_iterations" value="10" />
     <param name="publish_tf" value="true" />
-    <rosparam command="load" file="$(find ros_laser_template_matcher)/config/range.yaml" />
+    <rosparam command="load"
+      file="$(find ros_laser_template_matcher)/config/paragon_right_glass_elevator.yaml" />
   </node>
 
 

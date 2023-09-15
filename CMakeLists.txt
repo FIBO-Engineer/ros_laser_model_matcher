@@ -65,6 +65,6 @@ install(FILES laser_template_matcher_nodelet.xml
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION} )
 
 #Install demo files
-install(DIRECTORY demo
-    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION} )
+# install(DIRECTORY demo
+#     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION} )
 
