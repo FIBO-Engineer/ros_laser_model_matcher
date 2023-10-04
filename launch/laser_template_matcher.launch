@@ -10,8 +10,12 @@ Example launch file: launches the scan matcher with pre-recorded data
     <param name="max_iterations" value="10" />
     <param name="publish_tf" value="true" />
     <rosparam command="load"
-      file="$(find ros_laser_template_matcher)/config/paragon_right_glass_elevator.yaml" />
+      file="$(find ros_laser_template_matcher)/config/fibo_elevator_left.yaml" />
   </node>
+
+  <!-- Create a parking position -->
+  <node pkg="tf" type="static_transform_publisher" name="elevator_stand_broadcaster"
+    args="2.23 0 0 0 0 0 1 base_anchor elevator_stand 100" />
 
 
 </launch>

@@ -72,7 +72,7 @@ namespace scan_tools
     output_.dx_dy2_m = 0;
 
     // **** services
-    enable_matching_service_ = nh_.advertiseService("enable_matching", &LaserTemplateMatcher::enableMatchingCallback, this);
+    enable_matching_service_ = nh_.advertiseService("enable_template_matching", &LaserTemplateMatcher::enableMatchingCallback, this);
 
     // **** publishers
     model_publisher_ = nh_.advertise<sensor_msgs::LaserScan>("laser_model", 5);
