@@ -36,6 +36,7 @@
  */
 
 #include <laser_template_matcher/laser_template_matcher.h>
+#include <ros_laser_template_matcher/ChangeTemplate.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/io/pcd_io.h>
 #include <boost/assign.hpp>
@@ -151,23 +152,15 @@ namespace scan_tools
       laser_fixed_frame_ = "laser_anchor";
 
     laser_model.header.frame_id = laser_fixed_frame_;
-    nh_private_.getParam("angle_min", laser_model.angle_min);
-    nh_private_.getParam("angle_max", laser_model.angle_max);
-    nh_private_.getParam("angle_increment", laser_model.angle_increment);
-    nh_private_.getParam("time_increment", laser_model.time_increment);
-    nh_private_.getParam("scan_time", laser_model.scan_time);
-    nh_private_.getParam("range_min", laser_model.range_min);
-    nh_private_.getParam("range_max", laser_model.range_max);
-    nh_private_.getParam("ranges", laser_model.ranges);
-    nh_private_.getParam("intensities", laser_model.intensities);
-    sensor_msgs::LaserScan::ConstPtr laser_model_cptr = boost::make_shared<sensor_msgs::LaserScan>(laser_model);
-    laserScanToLDP(laser_model_cptr, model_ldp_);
 
-    model_ldp_->estimate[0] = 0.0;
-    model_ldp_->estimate[1] = 0.0;
-    model_ldp_->estimate[2] = 0.0;
+    if (!nh_private_.getParam("default_template", default_template_))
+    {
+      default_template_ = "";
+      ROS_ERROR("No default template specified");
+    }
+    // ros_laser_template_matcher::ChangeTemplateRequest change_template;
 
-    input_.laser_ref = model_ldp_;
+    // changeTemplateCallback()
 
     // **** input type - laser scan, or point clouds?
     // if false, will subscribe to LaserScan msgs on /scan.
@@ -463,6 +456,33 @@ namespace scan_tools
     }
     last_base_in_fixed_ = (model_from_msg * msg_from_base).inverse();
     ROS_INFO("Successfully set new anchor point");
+  }
+
+  bool LaserTemplateMatcher::changeTemplateCallback(laser_template_matcher::ChangeTemplate::Request &req,
+                                                    laser_template_matcher::ChangeTemplate::Response &res)
+  {
+    res.success = false;
+    std::string template_name = req.template_name;
+    if (nh_private_.getParam(template_name + "/angle_min", laser_model.angle_min) &&
+        nh_private_.getParam(template_name + "/angle_max", laser_model.angle_max) &&
+        nh_private_.getParam(template_name + "/angle_increment", laser_model.angle_increment) &&
+        nh_private_.getParam(template_name + "/time_increment", laser_model.time_increment) &&
+        nh_private_.getParam(template_name + "/scan_time", laser_model.scan_time) &&
+        nh_private_.getParam(template_name + "/range_min", laser_model.range_min) &&
+        nh_private_.getParam(template_name + "/range_max", laser_model.range_max) &&
+        nh_private_.getParam(template_name + "/ranges", laser_model.ranges) &&
+        nh_private_.getParam(template_name + "/intensities", laser_model.intensities))
+    {
+      res.success = true;
+    }
+    sensor_msgs::LaserScan::ConstPtr laser_model_cptr = boost::make_shared<sensor_msgs::LaserScan>(laser_model);
+    laserScanToLDP(laser_model_cptr, model_ldp_);
+
+    model_ldp_->estimate[0] = 0.0;
+    model_ldp_->estimate[1] = 0.0;
+    model_ldp_->estimate[2] = 0.0;
+
+    input_.laser_ref = model_ldp_;
   }
 
   bool LaserTemplateMatcher::enableMatchingCallback(std_srvs::SetBool::Request &req,

@@ -20,6 +20,16 @@ find_package(PCL REQUIRED QUIET)
 find_package(PkgConfig)
 pkg_check_modules(csm REQUIRED csm)
 
+add_service_files(
+  FILES
+  ChangeTemplate.srv
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs  # Or other packages containing msgs
+)
+
 # Set include directories
 include_directories(include ${catkin_INCLUDE_DIRS} ${csm_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS})
 link_directories(${csm_LIBRARY_DIRS})
@@ -28,7 +38,7 @@ link_directories(${csm_LIBRARY_DIRS})
 catkin_package(
     INCLUDE_DIRS include
     LIBRARIES laser_template_matcher
-    CATKIN_DEPENDS ${ROS_CXX_DEPENDENCIES}
+    CATKIN_DEPENDS ${ROS_CXX_DEPENDENCIES} message_runtime
 )
 
 #Create library
@@ -36,7 +46,7 @@ add_library(laser_template_matcher src/laser_template_matcher.cpp)
 
 #Note we don't link against pcl as we're using header-only parts of the library
 target_link_libraries( laser_template_matcher ${catkin_LIBRARIES} ${csm_LIBRARIES})
-add_dependencies(laser_template_matcher ${csm_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(laser_template_matcher ${csm_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
 #Create nodelet
 add_library(laser_template_matcher_nodelet src/laser_template_matcher_nodelet.cpp)

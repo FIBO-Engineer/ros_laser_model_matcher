@@ -1,0 +1,4 @@
+std::string template_name
+---
+bool success
+std::string message

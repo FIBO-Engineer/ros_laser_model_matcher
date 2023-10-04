@@ -104,7 +104,8 @@ namespace scan_tools
     std::string base_frame_;
     std::string base_fixed_frame_;
     std::string laser_fixed_frame_;
-    std::string model_path_;
+    std::string default_template_;
+    // std::string model_path_;
     pcl::PointCloud<pcl::PointXYZ>::Ptr model_cloud_;
     LDP model_ldp_;
     bool is_enabled_;
