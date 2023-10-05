@@ -462,6 +462,7 @@ namespace scan_tools
                                                     ros_laser_template_matcher::ChangeTemplate::Response &res)
   {
     res.success = false;
+    res.message = "Template not found";
     std::string template_name = req.template_name;
     if (nh_private_.getParam(template_name + "/angle_min", laser_model.angle_min) &&
         nh_private_.getParam(template_name + "/angle_max", laser_model.angle_max) &&
@@ -474,6 +475,7 @@ namespace scan_tools
         nh_private_.getParam(template_name + "/intensities", laser_model.intensities))
     {
       res.success = true;
+      res.message = "Template changed successfully";
     }
     sensor_msgs::LaserScan::ConstPtr laser_model_cptr = boost::make_shared<sensor_msgs::LaserScan>(laser_model);
     laserScanToLDP(laser_model_cptr, model_ldp_);
