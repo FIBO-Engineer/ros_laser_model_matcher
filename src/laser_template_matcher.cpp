@@ -36,7 +36,6 @@
  */
 
 #include <laser_template_matcher/laser_template_matcher.h>
-#include <ros_laser_template_matcher/ChangeTemplate.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/io/pcd_io.h>
 #include <boost/assign.hpp>
@@ -74,6 +73,7 @@ namespace scan_tools
 
     // **** services
     enable_matching_service_ = nh_.advertiseService("enable_template_matching", &LaserTemplateMatcher::enableMatchingCallback, this);
+    change_template_service_ = nh_.advertiseService("change_template", &LaserTemplateMatcher::changeTemplateCallback, this);
 
     // **** publishers
     model_publisher_ = nh_.advertise<sensor_msgs::LaserScan>("laser_model", 5);
@@ -103,7 +103,7 @@ namespace scan_tools
     }
 
     // *** subscribers
-    estimate_model_pose_subscriber_ = nh_.subscribe("estimate_model_pose", 1, &LaserTemplateMatcher::estimateModelPoseCallback, this);
+    estimate_model_pose_subscriber_ = nh_.subscribe("estimate_template_pose", 1, &LaserTemplateMatcher::estimateModelPoseCallback, this);
 
     if (use_cloud_input_)
     {
@@ -158,9 +158,9 @@ namespace scan_tools
       default_template_ = "";
       ROS_ERROR("No default template specified");
     }
-    // ros_laser_template_matcher::ChangeTemplateRequest change_template;
-
-    // changeTemplateCallback()
+    ros_laser_template_matcher::ChangeTemplate change_template;
+    change_template.request.template_name = default_template_;
+    changeTemplateCallback(change_template.request, change_template.response);
 
     // **** input type - laser scan, or point clouds?
     // if false, will subscribe to LaserScan msgs on /scan.
@@ -458,8 +458,8 @@ namespace scan_tools
     ROS_INFO("Successfully set new anchor point");
   }
 
-  bool LaserTemplateMatcher::changeTemplateCallback(laser_template_matcher::ChangeTemplate::Request &req,
-                                                    laser_template_matcher::ChangeTemplate::Response &res)
+  bool LaserTemplateMatcher::changeTemplateCallback(ros_laser_template_matcher::ChangeTemplate::Request &req,
+                                                    ros_laser_template_matcher::ChangeTemplate::Response &res)
   {
     res.success = false;
     std::string template_name = req.template_name;
@@ -483,6 +483,7 @@ namespace scan_tools
     model_ldp_->estimate[2] = 0.0;
 
     input_.laser_ref = model_ldp_;
+    return true;
   }
 
   bool LaserTemplateMatcher::enableMatchingCallback(std_srvs::SetBool::Request &req,

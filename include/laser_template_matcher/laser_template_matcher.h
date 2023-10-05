@@ -48,6 +48,7 @@
 #include <geometry_msgs/PoseWithCovariance.h>
 #include <geometry_msgs/TwistStamped.h>
 #include <nav_msgs/Odometry.h>
+#include <ros_laser_template_matcher/ChangeTemplate.h>
 #include <tf/transform_datatypes.h>
 #include <tf/transform_listener.h>
 #include <tf/transform_broadcaster.h>
@@ -85,6 +86,7 @@ namespace scan_tools
     ros::Subscriber vel_subscriber_;
     ros::Subscriber estimate_model_pose_subscriber_;
     ros::ServiceServer enable_matching_service_;
+    ros::ServiceServer change_template_service_;
 
     tf::TransformListener tf_listener_;
     tf::TransformBroadcaster tf_broadcaster_;
@@ -173,6 +175,9 @@ namespace scan_tools
                         LDP &ldp);
     void PointCloudToLDP(const PointCloudT::ConstPtr &cloud,
                          LDP &ldp);
+
+    bool changeTemplateCallback(ros_laser_template_matcher::ChangeTemplate::Request &req,
+                                ros_laser_template_matcher::ChangeTemplate::Response &res);
 
     void scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan_msg);
     void cloudCallback(const PointCloudT::ConstPtr &cloud);

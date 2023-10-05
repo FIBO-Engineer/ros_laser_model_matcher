@@ -1,4 +1,4 @@
-std::string template_name
+string template_name
 ---
 bool success
-std::string message
+string message
