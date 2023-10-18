@@ -681,6 +681,7 @@ namespace scan_tools
     // **** swap old and new
 
     last_icp_time_ = time;
+    ld_free(curr_ldp_scan);
 
     // **** statistics
 
