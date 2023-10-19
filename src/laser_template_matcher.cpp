@@ -54,6 +54,7 @@ namespace scan_tools
                                                                                                model_cloud_(new pcl::PointCloud<pcl::PointXYZ>())
   {
     ROS_INFO("Starting LaserTemplateMatcher");
+    model_ldp_ = NULL;
 
     // **** init parameters
 
@@ -478,6 +479,12 @@ namespace scan_tools
       res.message = "Template changed successfully";
     }
     sensor_msgs::LaserScan::ConstPtr laser_model_cptr = boost::make_shared<sensor_msgs::LaserScan>(laser_model);
+    if (model_ldp_)
+    {
+      ROS_INFO("[laser_template_matcher] Freeing model_ldp");
+      ld_free(model_ldp_);
+      ROS_INFO("[laser_template_matcher] model_ldp freed");
+    }
     laserScanToLDP(laser_model_cptr, model_ldp_);
 
     model_ldp_->estimate[0] = 0.0;
@@ -512,6 +519,7 @@ namespace scan_tools
         tfs.push_back(tf::StampedTransform(base_from_laser_, time, base_fixed_frame_, laser_fixed_frame_));
         tf_broadcaster_.sendTransform(tfs);
       }
+      ld_free(curr_ldp_scan);
       return;
     }
 
