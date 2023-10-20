@@ -412,6 +412,7 @@ namespace scan_tools
     LDP curr_ldp_scan;
     PointCloudToLDP(cloud, curr_ldp_scan);
     processScan(curr_ldp_scan, cloud_header.stamp);
+    ld_free(curr_ldp_scan);
   }
 
   void LaserTemplateMatcher::scanCallback(const sensor_msgs::LaserScan::ConstPtr &scan_msg)
@@ -436,6 +437,7 @@ namespace scan_tools
     LDP curr_ldp_scan;
     laserScanToLDP(scan_msg, curr_ldp_scan);
     processScan(curr_ldp_scan, scan_msg->header.stamp);
+    ld_free(curr_ldp_scan);
   }
 
   void LaserTemplateMatcher::estimateModelPoseCallback(const geometry_msgs::PoseStamped::ConstPtr &model_pose_msg)
@@ -519,7 +521,6 @@ namespace scan_tools
         tfs.push_back(tf::StampedTransform(base_from_laser_, time, base_fixed_frame_, laser_fixed_frame_));
         tf_broadcaster_.sendTransform(tfs);
       }
-      ld_free(curr_ldp_scan);
       return;
     }
 
@@ -689,7 +690,6 @@ namespace scan_tools
     // **** swap old and new
 
     last_icp_time_ = time;
-    ld_free(curr_ldp_scan);
 
     // **** statistics
 
